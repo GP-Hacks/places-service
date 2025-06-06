@@ -1,0 +1,107 @@
+name: Backend CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  YC_REGISTRY: cr.yandex
+  IMAGE_NAME: kdt-places-service
+  PROJECT_NAME: kdt-places-service
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        run: |
+          echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+          echo "IMAGE_TAG=main-latest" >> $GITHUB_ENV
+          echo "CONTAINER_NAME=places-service" >> $GITHUB_ENV
+          echo "PORT=8086" >> $GITHUB_ENV
+
+      - name: Install Yandex Cloud CLI
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash
+          echo "$HOME/yandex-cloud/bin" >> $GITHUB_PATH
+
+      - name: Get secrets from Lockbox
+        env:
+          YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
+          YC_CLOUD_ID: ${{ secrets.YC_CLOUD_ID }}
+          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+        run: |
+          yc config set token "$YC_OAUTH_TOKEN"
+          yc config set cloud-id "$YC_CLOUD_ID"
+          yc config set folder-id "$YC_FOLDER_ID"
+          
+          export SERVER_HOST=$(yc lockbox payload get "${PROJECT_NAME}-server-access" --format json | jq -r '.entries[] | select(.key=="SERVER_HOST") | .text_value')
+          export SSH_USERNAME=$(yc lockbox payload get "${PROJECT_NAME}-server-access" --format json | jq -r '.entries[] | select(.key=="SSH_USERNAME") | .text_value')
+          export SSH_PASSPHRASE=$(yc lockbox payload get "${PROJECT_NAME}-server-access" --format json | jq -r '.entries[] | select(.key=="SSH_PASSPHRASE") | .text_value')
+          export YC_REGISTRY_ID=$(yc lockbox payload get "${PROJECT_NAME}-server-access" --format json | jq -r '.entries[] | select(.key=="YC_REGISTRY_ID") | .text_value')
+          
+          echo "SERVER_HOST=$SERVER_HOST" >> $GITHUB_ENV
+          echo "SSH_USERNAME=$SSH_USERNAME" >> $GITHUB_ENV
+          echo "SSH_PASSPHRASE=$SSH_PASSPHRASE" >> $GITHUB_ENV
+          echo "YC_REGISTRY_ID=$YC_REGISTRY_ID" >> $GITHUB_ENV
+          
+          echo "SSH_PRIVATE_KEY<<EOF" >> $GITHUB_ENV
+          yc lockbox payload get "${PROJECT_NAME}-server-access" --format json | jq -r '.entries[] | select(.key=="SSH_PRIVATE_KEY") | .text_value' >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Yandex Container Registry
+        run: |
+          echo "${{ secrets.YC_OAUTH_TOKEN }}" | docker login \
+            --username oauth \
+            --password-stdin \
+            ${{ env.YC_REGISTRY }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.YC_REGISTRY }}/${{ env.YC_REGISTRY_ID }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ${{ env.YC_REGISTRY }}/${{ env.YC_REGISTRY_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Copy deployment script
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.SERVER_HOST }}
+          username: ${{ env.SSH_USERNAME }}
+          key: ${{ env.SSH_PRIVATE_KEY }}
+          source: "scripts/deploy.sh"
+          target: "/tmp/"
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.SERVER_HOST }}
+          username: ${{ env.SSH_USERNAME }}
+          key: ${{ env.SSH_PRIVATE_KEY }}
+          port: 22
+          timeout: 300s
+          script: |
+            chmod +x /tmp/scripts/deploy.sh
+            
+            /tmp/scripts/deploy.sh \
+              "${{ env.ENVIRONMENT }}" \
+              "${{ env.YC_REGISTRY }}/${{ env.YC_REGISTRY_ID }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" \
+              "${{ env.CONTAINER_NAME }}" \
+              "${{ env.PORT }}" \
+              "${{ secrets.YC_OAUTH_TOKEN }}"
+
