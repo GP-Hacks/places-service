@@ -8,7 +8,7 @@ CONTAINER_NAME="$3"
 PORT="$4"
 YC_OAUTH_TOKEN="$5"
 
-PROJECT_NAME="kdt-auth-service"
+PROJECT_NAME="kdt-places-service"
 
 if [[ -z "$ENVIRONMENT" || -z "$IMAGE" || -z "$CONTAINER_NAME" || -z "$PORT" || -z "$YC_OAUTH_TOKEN" ]]; then
     echo "❌ Error: Missing required arguments"
