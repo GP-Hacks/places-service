@@ -85,7 +85,7 @@ jobs:
           username: ${{ env.SSH_USERNAME }}
           key: ${{ env.SSH_PRIVATE_KEY }}
           source: "scripts/deploy.sh"
-          target: "/tmp/"
+          target: "/tmp/${{ env.PROJECT_NAME }}/"
 
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
@@ -96,7 +96,7 @@ jobs:
           port: 22
           timeout: 300s
           script: |
-            chmod +x /tmp/scripts/deploy.sh
+            chmod +x /tmp/${{ env.PROJECT_NAME }}/scripts/deploy.sh
             
             /tmp/scripts/deploy.sh \
               "${{ env.ENVIRONMENT }}" \
