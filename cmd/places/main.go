@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
+	"log/slog"
+	"net"
+
 	"github.com/GP-Hacks/kdt2024-commons/prettylogger"
 	"github.com/GP-Hacks/kdt2024-places/config"
 	"github.com/GP-Hacks/kdt2024-places/internal/grpc-server/handler"
 	"github.com/GP-Hacks/kdt2024-places/internal/storage"
 	"github.com/streadway/amqp"
 	"google.golang.org/grpc"
-	"log/slog"
-	"net"
 )
 
 func main() {
@@ -35,11 +36,13 @@ func main() {
 
 	storage, err := setupPostgreSQL(cfg, log)
 	if err != nil {
+		log.Error("Failed connect to postgres", slog.String("error", err.Error()))
 		return
 	}
 
 	conn, ch, err := setupRabbitMQ(cfg, log)
 	if err != nil {
+		log.Error("Failed connect to rabbitmq", slog.String("error", err.Error()))
 		return
 	}
 	defer func() {
@@ -52,6 +55,7 @@ func main() {
 	}()
 
 	if err := declareQueues(cfg, ch, log); err != nil {
+		log.Error("Failed declare queues", slog.String("error", err.Error()))
 		return
 	}
 
