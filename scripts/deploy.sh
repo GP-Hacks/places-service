@@ -16,7 +16,7 @@ if [[ -z "$ENVIRONMENT" || -z "$IMAGE" || -z "$CONTAINER_NAME" || -z "$PORT" || 
     exit 1
 fi
 
-DEPLOY_PATH="/opt/apps/$ENVIRONMENT"
+DEPLOY_PATH="/opt/apps/$CONTAINER_NAME/$ENVIRONMENT"
 ENV_FILE="$DEPLOY_PATH/.env"
 
 echo "🚀 Starting app deployment..."
@@ -74,22 +74,22 @@ echo "🛑 Stopping old application container..."
 sudo docker stop "$CONTAINER_NAME" 2>/dev/null || echo "Container was not running"
 sudo docker rm "$CONTAINER_NAME" 2>/dev/null || echo "Container was not found"
 
-echo "🔗 Finding existing network..."
-NETWORK_NAME=$(sudo docker network ls --format "{{.Name}}" | grep "${PROJECT_NAME}-network" | head -1)
-if [ -z "$NETWORK_NAME" ]; then
-    echo "⚠️  No existing network found, creating new one..."
-    NETWORK_NAME="${PROJECT_NAME}-network-$ENVIRONMENT"
-    sudo docker network create "$NETWORK_NAME"
-else
-    echo "📡 Using existing network: $NETWORK_NAME"
-fi
+# echo "🔗 Finding existing network..."
+# NETWORK_NAME=$(sudo docker network ls --format "{{.Name}}" | grep "${PROJECT_NAME}-network" | head -1)
+# if [ -z "$NETWORK_NAME" ]; then
+#     echo "⚠️  No existing network found, creating new one..."
+#     NETWORK_NAME="${PROJECT_NAME}-network-$ENVIRONMENT"
+#     sudo docker network create "$NETWORK_NAME"
+# else
+#     echo "📡 Using existing network: $NETWORK_NAME"
+# fi
 
 echo "▶️  Starting new application container..."
-echo "Command: docker run -d --name $CONTAINER_NAME --network $NETWORK_NAME --env-file $ENV_FILE -p $PORT:8080 --restart unless-stopped $IMAGE"
+echo "Command: docker run -d --name $CONTAINER_NAME --env-file $ENV_FILE -p $PORT:8080 --restart unless-stopped $IMAGE"
 
 sudo docker run -d \
   --name "$CONTAINER_NAME" \
-  --network "$NETWORK_NAME" \
+  # --network "$NETWORK_NAME" \
   --env-file "$ENV_FILE" \
   -p "$PORT:8080" \
   --restart unless-stopped \
