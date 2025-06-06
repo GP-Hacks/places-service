@@ -98,7 +98,7 @@ jobs:
           script: |
             chmod +x /tmp/${{ env.PROJECT_NAME }}/scripts/deploy.sh
             
-            /tmp/scripts/deploy.sh \
+            /tmp/${{ env.PROJECT_NAME }}/scripts/deploy.sh \
               "${{ env.ENVIRONMENT }}" \
               "${{ env.YC_REGISTRY }}/${{ env.YC_REGISTRY_ID }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" \
               "${{ env.CONTAINER_NAME }}" \
